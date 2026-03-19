@@ -1,0 +1,8 @@
+aiogram==3.13.1
+anthropic==0.42.0
+gspread==6.1.4
+google-auth==2.36.0
+apscheduler==3.10.4
+python-dotenv==1.0.1
+aiosqlite==0.20.0
+httpx==0.28.1

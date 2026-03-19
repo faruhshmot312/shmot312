@@ -1,0 +1,7 @@
+.env
+credentials.json
+shmot312-*.json
+cache.db
+__pycache__/
+*.pyc
+.venv/
