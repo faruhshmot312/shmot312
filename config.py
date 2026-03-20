@@ -42,7 +42,7 @@ class Config:
 
     # WebApp
     WEBAPP_HOST: str = "0.0.0.0"
-    WEBAPP_PORT: int = 8080
+    WEBAPP_PORT: int = int(os.environ.get("PORT", os.environ.get("WEBAPP_PORT", "8080")))
     WEBAPP_URL: str = os.environ.get("WEBAPP_URL", "")  # https://your-domain.com
 
 

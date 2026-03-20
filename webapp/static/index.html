@@ -34,15 +34,15 @@
             <section class="tab-content active" id="tab-main">
                 <!-- KPI Cards -->
                 <div class="kpi-grid">
+                    <div class="kpi-card green">
+                        <div class="kpi-label">Прибыль</div>
+                        <div class="kpi-value" id="kpi-profit">—</div>
+                        <div class="kpi-sub" id="kpi-margin">—</div>
+                    </div>
                     <div class="kpi-card blue">
                         <div class="kpi-label">Баланс</div>
                         <div class="kpi-value" id="kpi-balance">—</div>
                         <div class="kpi-sub" id="kpi-days-left">—</div>
-                    </div>
-                    <div class="kpi-card green">
-                        <div class="kpi-label">Выиграно</div>
-                        <div class="kpi-value" id="kpi-won-amount">—</div>
-                        <div class="kpi-sub" id="kpi-won-count">—</div>
                     </div>
                     <div class="kpi-card orange">
                         <div class="kpi-label">В работе</div>
@@ -71,16 +71,50 @@
 
             <!-- TAB: Финансы -->
             <section class="tab-content" id="tab-finance">
+                <!-- Сводка прибыли -->
+                <div class="card">
+                    <h2>Сводка за год</h2>
+                    <div class="stat-row">
+                        <span>Выручка (оплачено):</span>
+                        <span class="stat-val color-green" id="profit-revenue">—</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Закуп товаров:</span>
+                        <span class="stat-val color-red" id="profit-purchases">—</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Пост. расходы/мес:</span>
+                        <span class="stat-val" id="monthly-costs">—</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Не оплачено:</span>
+                        <span class="stat-val color-orange" id="profit-unpaid">—</span>
+                    </div>
+                    <div class="stat-row highlight">
+                        <span>Чистая прибыль:</span>
+                        <span class="stat-val" id="profit-net">—</span>
+                    </div>
+                </div>
+
+                <!-- Прибыль по месяцам -->
+                <div class="card">
+                    <h2>Прибыль по месяцам</h2>
+                    <canvas id="chart-profit" height="200"></canvas>
+                </div>
+
+                <!-- Приход / Расход -->
                 <div class="card">
                     <h2>Приход / Расход по месяцам</h2>
                     <canvas id="chart-months" height="200"></canvas>
                 </div>
+
+                <!-- Закуп по месяцам -->
                 <div class="card">
-                    <h2>Постоянные расходы</h2>
-                    <div class="stat-row">
-                        <span>Ежемесячно:</span>
-                        <span class="stat-val" id="monthly-costs">—</span>
-                    </div>
+                    <h2>Закуп по месяцам</h2>
+                    <canvas id="chart-purchases" height="160"></canvas>
+                </div>
+
+                <div class="card">
                     <div class="stat-row">
                         <span>Запас дней:</span>
                         <span class="stat-val" id="days-reserve">—</span>

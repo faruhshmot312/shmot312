@@ -116,6 +116,52 @@ async def dashboard():
                     "amount": s.get("total_amount", 0),
                 })
 
+    # --- Прибыль ---
+    # Выручка из "Итоговые"
+    report = all_data.get("Общий отчёт по заказам | 2026", {})
+    totals_sheet = report.get("Итоговые", [])
+    total_orders_sum = _parse_number(totals_sheet[1][1]) if len(totals_sheet) > 1 and len(totals_sheet[1]) > 1 else 0
+    total_paid = _parse_number(totals_sheet[7][1]) if len(totals_sheet) > 7 and len(totals_sheet[7]) > 1 else 0
+    total_unpaid = _parse_number(totals_sheet[8][1]) if len(totals_sheet) > 8 and len(totals_sheet[8]) > 1 else 0
+
+    # Закуп из "закупки | 2026" — помесячные итоги
+    purchase = all_data.get("Закуп | 2026", {})
+    purchase_sheet = purchase.get("закупки | 2026", [])
+    monthly_purchases = []
+    total_purchases = 0.0
+    month_names_map = {
+        "ЯНВАРЬ": "Январь", "ФЕВРАЛЬ": "Февраль", "МАРТ": "Март",
+        "АПРЕЛЬ": "Апрель", "МАЙ": "Май", "ИЮНЬ": "Июнь",
+        "ИЮЛЬ": "Июль", "АВГУСТ": "Август", "СЕНТЯБРЬ": "Сентябрь",
+        "ОКТЯБРЬ": "Октябрь", "НОЯБРЬ": "Ноябрь", "ДЕКАБРЬ": "Декабрь",
+    }
+    for row in purchase_sheet:
+        if row and row[0] and "| 2026" in row[0] and len(row) > 2:
+            raw_month = row[0].split("|")[0].strip()
+            month_label = month_names_map.get(raw_month, raw_month)
+            amount = _parse_number(row[2])
+            if amount > 0:
+                monthly_purchases.append({"month": month_label, "amount": amount})
+                total_purchases += amount
+
+    # Помесячная прибыль (из Банк Статистика: сальдо = приход − расход)
+    monthly_profit = []
+    total_income_ytd = 0.0
+    total_expense_ytd = 0.0
+    for md in months_data:
+        total_income_ytd += md["income"]
+        total_expense_ytd += md["expense"]
+        monthly_profit.append({
+            "month": md["month"],
+            "income": md["income"],
+            "expense": md["expense"],
+            "profit": md["saldo"],
+        })
+
+    net_profit_ytd = total_income_ytd - total_expense_ytd
+    months_elapsed = max(len(months_data), 1)
+    gross_margin = round((total_paid - total_purchases) / total_paid * 100, 1) if total_paid > 0 else 0
+
     # --- Менеджеры (таблицы) ---
     seamstresses = []
     for name in ["Сайкал | SHMOT312", "Алтынай | MyStyle", "Абубакир", "Гульнара"]:
@@ -204,6 +250,19 @@ async def dashboard():
             "monthly_costs": monthly_costs,
             "days_left": round(days_left, 1),
             "months_data": months_data,
+        },
+        "profit": {
+            "total_orders": total_orders_sum,
+            "total_paid": total_paid,
+            "total_unpaid": total_unpaid,
+            "total_purchases": total_purchases,
+            "fixed_costs_monthly": monthly_costs,
+            "net_profit_ytd": net_profit_ytd,
+            "total_income_ytd": total_income_ytd,
+            "total_expense_ytd": total_expense_ytd,
+            "gross_margin": gross_margin,
+            "monthly_purchases": monthly_purchases,
+            "monthly_profit": monthly_profit,
         },
         "deals": {
             "total": len(deals),

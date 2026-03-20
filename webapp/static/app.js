@@ -54,11 +54,13 @@ function render(d) {
         now.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
     // KPI
+    const profit = d.profit.net_profit_ytd;
+    document.getElementById('kpi-profit').textContent = fmtShort(profit);
+    document.getElementById('kpi-profit').classList.add(profit >= 0 ? 'color-green' : 'color-red');
+    document.getElementById('kpi-margin').textContent = `маржа ${d.profit.gross_margin}%`;
+
     document.getElementById('kpi-balance').textContent = fmtShort(d.finance.total);
     document.getElementById('kpi-days-left').textContent = `запас ${Math.round(d.finance.days_left)} дн.`;
-
-    document.getElementById('kpi-won-amount').textContent = fmtShort(d.deals.won_amount);
-    document.getElementById('kpi-won-count').textContent = `${d.deals.won} сделок, ср.чек ${fmtShort(d.deals.avg_check)}`;
 
     document.getElementById('kpi-active-amount').textContent = fmtShort(d.deals.active_amount);
     document.getElementById('kpi-active-count').textContent = `${d.deals.active} сделок`;
@@ -72,10 +74,19 @@ function render(d) {
     // Overdue
     renderOverdue(d.overdue);
 
-    // Finance tab
-    document.getElementById('monthly-costs').textContent = fmt(d.finance.monthly_costs) + ' сом/мес';
+    // Finance tab — profit summary
+    document.getElementById('profit-revenue').textContent = fmt(d.profit.total_paid) + ' сом';
+    document.getElementById('profit-purchases').textContent = '−' + fmt(d.profit.total_purchases) + ' сом';
+    document.getElementById('monthly-costs').textContent = fmt(d.profit.fixed_costs_monthly) + ' сом/мес';
+    document.getElementById('profit-unpaid').textContent = fmt(d.profit.total_unpaid) + ' сом';
+    const netEl = document.getElementById('profit-net');
+    netEl.textContent = fmt(d.profit.net_profit_ytd) + ' сом';
+    netEl.classList.add(d.profit.net_profit_ytd >= 0 ? 'color-green' : 'color-red');
+
     document.getElementById('days-reserve').textContent = Math.round(d.finance.days_left) + ' дней';
+    renderProfitChart(d.profit.monthly_profit);
     renderMonthsChart(d.finance.months_data);
+    renderPurchasesChart(d.profit.monthly_purchases);
 
     // Deals tab
     renderManagers(d.managers);
@@ -158,6 +169,48 @@ function renderSeamstressDetails(seamstresses) {
 }
 
 // --- CHARTS ---
+
+function renderProfitChart(monthly) {
+    if (!monthly.length) return;
+    new Chart(document.getElementById('chart-profit'), {
+        type: 'bar',
+        data: {
+            labels: monthly.map(m => m.month),
+            datasets: [{
+                label: 'Прибыль',
+                data: monthly.map(m => m.profit),
+                backgroundColor: monthly.map(m => m.profit >= 0 ? '#2ec4b6' : '#e63946'),
+                borderRadius: 6, barPercentage: 0.6,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { ticks: { callback: v => fmtShort(v) } } }
+        }
+    });
+}
+
+function renderPurchasesChart(purchases) {
+    if (!purchases.length) return;
+    new Chart(document.getElementById('chart-purchases'), {
+        type: 'bar',
+        data: {
+            labels: purchases.map(p => p.month),
+            datasets: [{
+                label: 'Закуп',
+                data: purchases.map(p => p.amount),
+                backgroundColor: '#ff9f1c',
+                borderRadius: 6, barPercentage: 0.6,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { ticks: { callback: v => fmtShort(v) } } }
+        }
+    });
+}
 
 function renderMonthsChart(months) {
     if (!months.length) return;
