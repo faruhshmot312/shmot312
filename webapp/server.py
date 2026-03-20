@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from cache.manager import get_all_sheets_data, get_bitrix_data
+from cache.manager import get_all_sheets_data, get_bitrix_data, refresh_all
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,13 @@ def _parse_number(value: str) -> float:
         return float(cleaned)
     except (ValueError, TypeError):
         return 0.0
+
+
+@app.post("/api/refresh")
+async def api_refresh():
+    """Принудительное обновление кэша."""
+    await refresh_all()
+    return {"ok": True}
 
 
 @app.get("/")

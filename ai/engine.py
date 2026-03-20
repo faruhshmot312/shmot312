@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -45,25 +46,30 @@ async def route_question(question: str) -> dict:
     sources_desc += "- overdue: просроченные заказы\n"
 
     client = get_client()
-    try:
-        response = await client.messages.create(
-            model=config.AI_ROUTER_MODEL,
-            max_tokens=1024,
-            system=ROUTER_PROMPT,
-            messages=[{"role": "user", "content": f"{sources_desc}\n\nВопрос: {question}"}],
-        )
-        text = response.content[0].text.strip()
-        # Убираем markdown обёртку если есть
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-        return json.loads(text)
-    except (json.JSONDecodeError, Exception) as e:
-        logger.warning("Router fallback (error: %s), загружаем всё", e)
-        # Fallback: грузим всё
-        return {"sheets": [], "need_bitrix": True, "bitrix_data": ["deals", "pipeline_stats"]}
+    for attempt in range(3):
+        try:
+            response = await client.messages.create(
+                model=config.AI_ROUTER_MODEL,
+                max_tokens=1024,
+                system=ROUTER_PROMPT,
+                messages=[{"role": "user", "content": f"{sources_desc}\n\nВопрос: {question}"}],
+            )
+            text = response.content[0].text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                text = text.strip()
+            return json.loads(text)
+        except anthropic.RateLimitError:
+            wait = (attempt + 1) * 30
+            logger.warning("Router rate limit, retry %d/3 через %dс", attempt + 1, wait)
+            if attempt < 2:
+                await asyncio.sleep(wait)
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning("Router fallback (error: %s), загружаем всё", e)
+            break
+    return {"sheets": [], "need_bitrix": True, "bitrix_data": ["deals", "pipeline_stats"]}
 
 
 async def _gather_context(route: dict) -> str:
@@ -151,17 +157,25 @@ async def ask(question: str, data_context: str | None = None) -> str:
 
 Вопрос: {question}"""
 
-    try:
-        response = await client.messages.create(
-            model=config.AI_MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
-        )
-        return response.content[0].text
-    except anthropic.APIError as e:
-        logger.error("Claude API error: %s", e)
-        return f"Ошибка при обращении к ИИ: {e}"
+    for attempt in range(3):
+        try:
+            response = await client.messages.create(
+                model=config.AI_MODEL,
+                max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_message}],
+            )
+            return response.content[0].text
+        except anthropic.RateLimitError:
+            wait = (attempt + 1) * 30
+            logger.warning("Rate limit, retry %d/3 через %dс", attempt + 1, wait)
+            if attempt < 2:
+                await asyncio.sleep(wait)
+            else:
+                return "⏳ Сервер ИИ перегружен. Подожди 1-2 минуты и попробуй ещё раз."
+        except anthropic.APIError as e:
+            logger.error("Claude API error: %s", e)
+            return f"Ошибка при обращении к ИИ: {e}"
 
 
 async def generate_daily_report() -> str:
