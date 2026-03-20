@@ -190,7 +190,7 @@ async def dashboard(period: Optional[str] = Query("all", regex="^(week|month|qua
 
     net_profit_ytd = total_income_ytd - total_expense_ytd
     months_elapsed = max(len(months_data), 1)
-    gross_margin = round((total_paid - total_purchases) / total_paid * 100, 1) if total_paid > 0 else 0
+    gross_margin = round((total_income_ytd - total_purchases) / total_income_ytd * 100, 1) if total_income_ytd > 0 else 0
 
     # --- Менеджеры (таблицы) ---
     seamstresses = []
