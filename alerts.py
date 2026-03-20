@@ -127,30 +127,39 @@ async def _check_cash_balance() -> list[str]:
 
 
 async def _check_debitors(deals: list[dict]) -> list[str]:
-    """Алерт: крупная дебиторка."""
-    messages = []
+    """Алерт: крупная дебиторка (сводка, не по отдельности)."""
+    big_debitors = []
     for d in deals:
         debt = float(d.get("UF_CRM_1760524188", 0) or 0)
         if debt >= config.ALERT_DEBT_MAX:
-            key = f"debt_{d['ID']}"
-            if not await _already_sent(key):
-                msg = (
-                    f"⚠️ *Дебиторка*\n"
-                    f"Сделка: {d.get('TITLE', '?')}\n"
-                    f"Остаток: {debt:,.0f} сом\n"
-                    f"Стадия: {d.get('STAGE_ID', '?')}"
-                )
-                await _mark_sent(key, msg)
-                messages.append(msg)
-    return messages
+            big_debitors.append((d.get("TITLE", "?"), debt))
+
+    if not big_debitors:
+        return []
+
+    key = f"debitors_summary_{_now().strftime('%Y-%m-%d')}"
+    if await _already_sent(key):
+        return []
+
+    total = sum(d[1] for d in big_debitors)
+    top5 = sorted(big_debitors, key=lambda x: x[1], reverse=True)[:5]
+    lines = [f"⚠️ *Дебиторка: {len(big_debitors)} крупных ({total:,.0f} сом)*\n"]
+    for title, debt in top5:
+        lines.append(f"• {title}: {debt:,.0f} сом")
+    if len(big_debitors) > 5:
+        lines.append(f"...и ещё {len(big_debitors) - 5}")
+
+    msg = "\n".join(lines)
+    await _mark_sent(key, msg)
+    return [msg]
 
 
 async def _check_overdue(deals: list[dict]) -> list[str]:
-    """Алерт: просроченные заказы."""
-    messages = []
+    """Алерт: просроченные заказы (сводка)."""
     today = _now().date()
     active_stages = {"NEW", "PREPARATION", "PREPAYMENT_INVOICE", "UC_ZGID52", "EXECUTING", "UC_LGY0S7", "FINAL_INVOICE"}
 
+    overdue_list = []
     for d in deals:
         if d.get("STAGE_ID") not in active_stages:
             continue
@@ -161,21 +170,27 @@ async def _check_overdue(deals: list[dict]) -> list[str]:
             deadline = datetime.fromisoformat(deadline_str.split("T")[0]).date()
         except (ValueError, TypeError):
             continue
-
         days_late = (today - deadline).days
         if days_late >= 3:
-            key = f"overdue_{d['ID']}"
-            if not await _already_sent(key):
-                amount = float(d.get("OPPORTUNITY", 0) or 0)
-                msg = (
-                    f"🔴 *Просрочка*\n"
-                    f"Сделка: {d.get('TITLE', '?')}\n"
-                    f"Срок был: {deadline.strftime('%d.%m.%Y')} (просрочка {days_late} дн.)\n"
-                    f"Сумма: {amount:,.0f} сом"
-                )
-                await _mark_sent(key, msg)
-                messages.append(msg)
-    return messages
+            overdue_list.append((d.get("TITLE", "?"), days_late, float(d.get("OPPORTUNITY", 0) or 0)))
+
+    if not overdue_list:
+        return []
+
+    key = f"overdue_summary_{_now().strftime('%Y-%m-%d')}"
+    if await _already_sent(key):
+        return []
+
+    top5 = sorted(overdue_list, key=lambda x: x[1], reverse=True)[:5]
+    lines = [f"🔴 *Просрочки: {len(overdue_list)} заказов*\n"]
+    for title, days, amount in top5:
+        lines.append(f"• {title}: {days} дн. ({amount:,.0f} сом)")
+    if len(overdue_list) > 5:
+        lines.append(f"...и ещё {len(overdue_list) - 5}")
+
+    msg = "\n".join(lines)
+    await _mark_sent(key, msg)
+    return [msg]
 
 
 async def _check_low_orders(deals: list[dict]) -> list[str]:

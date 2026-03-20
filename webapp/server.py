@@ -242,6 +242,149 @@ async def dashboard():
 
     days_left = (balance + cash) / (monthly_costs / 30) if monthly_costs > 0 else 999
 
+    # --- Аналитика: дебиторка по возрасту ---
+    debt_aging = {"0_15": 0, "15_30": 0, "30_60": 0, "60_plus": 0}
+    debt_aging_count = {"0_15": 0, "15_30": 0, "30_60": 0, "60_plus": 0}
+    for d in debitors:
+        debt_val = float(d.get("UF_CRM_1760524188", 0) or 0)
+        created = d.get("DATE_CREATE", "")
+        try:
+            deal_date = datetime.fromisoformat(created.split("+")[0]).date()
+            age = (today - deal_date).days
+        except (ValueError, TypeError):
+            age = 0
+        if age >= 60:
+            bucket = "60_plus"
+        elif age >= 30:
+            bucket = "30_60"
+        elif age >= 15:
+            bucket = "15_30"
+        else:
+            bucket = "0_15"
+        debt_aging[bucket] += debt_val
+        debt_aging_count[bucket] += 1
+
+    # --- Аналитика: товары в заказах ---
+    from collections import Counter
+    product_counter: Counter = Counter()
+    product_revenue: dict[str, float] = {}
+    for d in won:
+        order_items = d.get("UF_CRM_1761665423") or []
+        amount = float(d.get("OPPORTUNITY", 0) or 0)
+        if order_items:
+            for item in order_items:
+                if isinstance(item, str):
+                    name = item.split(" цвет")[0].split(" -")[0].strip()
+                    # Group similar items
+                    lower = name.lower()
+                    if "худи" in lower:
+                        cat = "Худи"
+                    elif "футболк" in lower:
+                        cat = "Футболки"
+                    elif "фартук" in lower:
+                        cat = "Фартуки"
+                    elif "кепк" in lower or "бейс" in lower:
+                        cat = "Кепки"
+                    elif "рубаш" in lower:
+                        cat = "Рубашки"
+                    elif "батник" in lower or "свитш" in lower:
+                        cat = "Свитшоты"
+                    elif "шеврон" in lower:
+                        cat = "Шевроны"
+                    elif "бандан" in lower:
+                        cat = "Банданы"
+                    elif "изделие клиента" in lower:
+                        cat = "Изделие клиента"
+                    else:
+                        cat = "Другое"
+                    product_counter[cat] += 1
+                    product_revenue[cat] = product_revenue.get(cat, 0) + amount / max(len(order_items), 1)
+
+    top_products = []
+    for cat, count in product_counter.most_common(8):
+        rev = product_revenue.get(cat, 0)
+        top_products.append({"name": cat, "count": count, "revenue": round(rev)})
+
+    # --- Аналитика: метод нанесения ---
+    method_map = {"125": "Вышивка", "127": "ДТФ"}
+    method_stats: dict[str, dict] = {}
+    for d in won:
+        m = d.get("UF_CRM_1760088138", "")
+        label = method_map.get(m, "")
+        if not label:
+            continue
+        if label not in method_stats:
+            method_stats[label] = {"count": 0, "revenue": 0}
+        method_stats[label]["count"] += 1
+        method_stats[label]["revenue"] += float(d.get("OPPORTUNITY", 0) or 0)
+    print_methods = [{"name": k, **v} for k, v in method_stats.items()]
+
+    # --- Аналитика: повторные клиенты ---
+    contact_deals: dict[str, list] = {}
+    for d in deals:
+        cid = d.get("CONTACT_ID", "")
+        if cid:
+            contact_deals.setdefault(cid, []).append(d)
+    total_unique = len(contact_deals)
+    repeat_contacts = {cid: dl for cid, dl in contact_deals.items() if len(dl) > 1}
+    repeat_count = len(repeat_contacts)
+    repeat_pct = round(repeat_count / total_unique * 100, 1) if total_unique else 0
+
+    top_clients = []
+    for cid, dl in sorted(repeat_contacts.items(), key=lambda x: sum(float(d.get("OPPORTUNITY", 0) or 0) for d in x[1]), reverse=True)[:5]:
+        rev = sum(float(d.get("OPPORTUNITY", 0) or 0) for d in dl)
+        top_clients.append({"title": dl[0].get("TITLE", "?"), "orders": len(dl), "revenue": round(rev)})
+
+    # --- Аналитика: цикл сделки ---
+    cycles = []
+    for d in won:
+        try:
+            created = datetime.fromisoformat(d["DATE_CREATE"].split("+")[0])
+            closed = datetime.fromisoformat(d["CLOSEDATE"].split("+")[0])
+            days = (closed - created).days
+            if 0 <= days < 365:
+                cycles.append(days)
+        except (ValueError, TypeError, KeyError):
+            pass
+    avg_cycle = round(sum(cycles) / len(cycles), 1) if cycles else 0
+    median_cycle = sorted(cycles)[len(cycles) // 2] if cycles else 0
+
+    # --- Аналитика: источники ---
+    source_names = {"WEBFORM": "Сайт", "CALLBACK": "Обратный звонок", "CALL": "Звонок", "2": "Рекомендация", "4": "Реклама"}
+    source_stats: dict[str, dict] = {}
+    for d in deals:
+        sid = d.get("SOURCE_ID", "") or "Другое"
+        label = source_names.get(sid, sid)
+        if label not in source_stats:
+            source_stats[label] = {"total": 0, "won": 0, "revenue": 0}
+        source_stats[label]["total"] += 1
+        if d.get("STAGE_ID") == "WON":
+            source_stats[label]["won"] += 1
+            source_stats[label]["revenue"] += float(d.get("OPPORTUNITY", 0) or 0)
+    sources = []
+    for name, s in sorted(source_stats.items(), key=lambda x: x[1]["revenue"], reverse=True):
+        conv = round(s["won"] / s["total"] * 100, 1) if s["total"] else 0
+        sources.append({"name": name, "total": s["total"], "won": s["won"], "revenue": round(s["revenue"]), "conversion": conv})
+
+    # --- Аналитика: помесячные сделки ---
+    month_deals: dict[str, dict] = {}
+    for d in deals:
+        try:
+            dt = datetime.fromisoformat(d["DATE_CREATE"].split("+")[0])
+            mkey = dt.strftime("%Y-%m")
+            mlabel = {"01": "Январь", "02": "Февраль", "03": "Март", "04": "Апрель", "05": "Май", "06": "Июнь"}.get(dt.strftime("%m"), dt.strftime("%m"))
+        except (ValueError, TypeError, KeyError):
+            continue
+        if mkey not in month_deals:
+            month_deals[mkey] = {"month": mlabel, "total": 0, "won": 0, "revenue": 0, "lost": 0}
+        month_deals[mkey]["total"] += 1
+        if d.get("STAGE_ID") == "WON":
+            month_deals[mkey]["won"] += 1
+            month_deals[mkey]["revenue"] += float(d.get("OPPORTUNITY", 0) or 0)
+        elif d.get("STAGE_ID") in lost_stages:
+            month_deals[mkey]["lost"] += 1
+    monthly_deals = [v for _, v in sorted(month_deals.items())]
+
     return {
         "finance": {
             "bank_balance": balance,
@@ -280,4 +423,25 @@ async def dashboard():
         "managers_sheets": seamstresses,
         "managers": managers,
         "rejections": rejection_reasons,
+        "analytics": {
+            "debt_aging": {
+                "buckets": [
+                    {"label": "0-15 дн", "amount": round(debt_aging["0_15"]), "count": debt_aging_count["0_15"]},
+                    {"label": "15-30 дн", "amount": round(debt_aging["15_30"]), "count": debt_aging_count["15_30"]},
+                    {"label": "30-60 дн", "amount": round(debt_aging["30_60"]), "count": debt_aging_count["30_60"]},
+                    {"label": "60+ дн", "amount": round(debt_aging["60_plus"]), "count": debt_aging_count["60_plus"]},
+                ],
+            },
+            "products": top_products,
+            "print_methods": print_methods,
+            "repeat_clients": {
+                "unique": total_unique,
+                "repeat": repeat_count,
+                "repeat_pct": repeat_pct,
+                "top": top_clients,
+            },
+            "deal_cycle": {"avg": avg_cycle, "median": median_cycle},
+            "sources": sources,
+            "monthly_deals": monthly_deals,
+        },
     }

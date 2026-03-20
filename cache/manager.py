@@ -54,7 +54,7 @@ async def refresh_sheets_cache() -> None:
 
             logger.info("Кэш обновлён: %s (%d листов)", entry.name, len(sheets_data))
         except Exception as e:
-            logger.error("Ошибка обновления кэша %s: %s", entry.name, e)
+            logger.error("Ошибка обновления кэша %s: %s %s", entry.name, type(e).__name__, e)
 
     await db.commit()
 

@@ -6,12 +6,13 @@ if (tg) {
 }
 
 // Format numbers
-function fmt(n, decimals = 0) {
+function fmt(n) {
     if (n === null || n === undefined) return '—';
     return Math.round(n).toLocaleString('ru-RU');
 }
 
 function fmtShort(n) {
+    if (n === null || n === undefined) return '—';
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
     if (n >= 1_000) return Math.round(n / 1_000) + 'K';
     return fmt(n);
@@ -45,7 +46,6 @@ async function loadDashboard() {
 }
 
 function render(d) {
-    // Hide loader, show content
     document.getElementById('loader').style.display = 'none';
     document.getElementById('content').style.display = 'block';
 
@@ -53,7 +53,7 @@ function render(d) {
     document.getElementById('update-time').textContent =
         now.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-    // KPI
+    // === KPI ===
     const profit = d.profit.net_profit_ytd;
     document.getElementById('kpi-profit').textContent = fmtShort(profit);
     document.getElementById('kpi-profit').classList.add(profit >= 0 ? 'color-green' : 'color-red');
@@ -68,13 +68,17 @@ function render(d) {
     document.getElementById('kpi-debt').textContent = fmtShort(d.debitors.total);
     document.getElementById('kpi-debt-count').textContent = `${d.debitors.count} должников`;
 
-    // Funnel
-    renderFunnel(d.funnel);
+    // Mini stats
+    document.getElementById('mini-deals').textContent = d.deals.total;
+    document.getElementById('mini-conv').textContent = d.deals.conversion + '%';
+    document.getElementById('mini-avg').textContent = fmtShort(d.deals.avg_check);
+    document.getElementById('mini-cycle').textContent = d.analytics.deal_cycle.avg + ' дн.';
 
-    // Overdue
+    // Funnel & Overdue
+    renderFunnel(d.funnel);
     renderOverdue(d.overdue);
 
-    // Finance tab — profit summary
+    // === Finance tab ===
     document.getElementById('profit-revenue').textContent = fmt(d.profit.total_paid) + ' сом';
     document.getElementById('profit-purchases').textContent = '−' + fmt(d.profit.total_purchases) + ' сом';
     document.getElementById('monthly-costs').textContent = fmt(d.profit.fixed_costs_monthly) + ' сом/мес';
@@ -82,23 +86,31 @@ function render(d) {
     const netEl = document.getElementById('profit-net');
     netEl.textContent = fmt(d.profit.net_profit_ytd) + ' сом';
     netEl.classList.add(d.profit.net_profit_ytd >= 0 ? 'color-green' : 'color-red');
-
     document.getElementById('days-reserve').textContent = Math.round(d.finance.days_left) + ' дней';
+
     renderProfitChart(d.profit.monthly_profit);
     renderMonthsChart(d.finance.months_data);
     renderPurchasesChart(d.profit.monthly_purchases);
 
-    // Deals tab
+    // === Deals tab ===
+    renderAgingChart(d.analytics.debt_aging.buckets);
     renderManagers(d.managers);
     renderRejectionsChart(d.rejections);
     renderDebitors(d.debitors.list);
 
-    // Managers (sheets) tab
+    // === Team tab ===
     renderSeamstressesChart(d.managers_sheets);
     renderSeamstressDetails(d.managers_sheets);
+
+    // === Analytics tab ===
+    renderProductsChart(d.analytics.products);
+    renderPrintMethods(d.analytics.print_methods);
+    renderRepeatClients(d.analytics.repeat_clients);
+    renderSourcesChart(d.analytics.sources);
+    renderMonthlyDealsChart(d.analytics.monthly_deals);
 }
 
-// --- RENDER FUNCTIONS ---
+// === RENDER FUNCTIONS ===
 
 function renderFunnel(funnel) {
     const el = document.getElementById('funnel');
@@ -168,7 +180,41 @@ function renderSeamstressDetails(seamstresses) {
     ).join('');
 }
 
-// --- CHARTS ---
+function renderPrintMethods(methods) {
+    const el = document.getElementById('print-methods');
+    if (!methods.length) { el.innerHTML = '<p>Нет данных</p>'; return; }
+    const total = methods.reduce((s, m) => s + m.count, 0);
+    el.innerHTML = methods.map(m => {
+        const pct = total ? Math.round(m.count / total * 100) : 0;
+        const color = m.name === 'Вышивка' ? 'var(--blue)' : 'var(--orange)';
+        return `<div class="method-row">
+            <div class="method-header">
+                <span class="method-name" style="color:${color}">${m.name}</span>
+                <span class="method-pct">${pct}% (${m.count} шт.)</span>
+            </div>
+            <div class="method-bar-bg"><div class="method-bar" style="width:${pct}%;background:${color}"></div></div>
+            <div class="method-revenue">Выручка: ${fmtShort(m.revenue)} сом</div>
+        </div>`;
+    }).join('');
+}
+
+function renderRepeatClients(data) {
+    document.getElementById('clients-unique').textContent = data.unique;
+    document.getElementById('clients-repeat').textContent = data.repeat;
+    document.getElementById('clients-pct').textContent = data.repeat_pct + '%';
+
+    const el = document.getElementById('top-clients');
+    if (!data.top.length) return;
+    el.innerHTML = '<div class="top-label">Топ повторных клиентов:</div>' +
+        data.top.map(c =>
+            `<div class="debt-row">
+                <span class="debt-title">${c.title} (${c.orders}x)</span>
+                <span class="stat-val">${fmtShort(c.revenue)}</span>
+            </div>`
+        ).join('');
+}
+
+// === CHARTS ===
 
 function renderProfitChart(monthly) {
     if (!monthly.length) return;
@@ -183,11 +229,7 @@ function renderProfitChart(monthly) {
                 borderRadius: 6, barPercentage: 0.6,
             }]
         },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: { y: { ticks: { callback: v => fmtShort(v) } } }
-        }
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => fmtShort(v) } } } }
     });
 }
 
@@ -197,18 +239,9 @@ function renderPurchasesChart(purchases) {
         type: 'bar',
         data: {
             labels: purchases.map(p => p.month),
-            datasets: [{
-                label: 'Закуп',
-                data: purchases.map(p => p.amount),
-                backgroundColor: '#ff9f1c',
-                borderRadius: 6, barPercentage: 0.6,
-            }]
+            datasets: [{ label: 'Закуп', data: purchases.map(p => p.amount), backgroundColor: '#ff9f1c', borderRadius: 6, barPercentage: 0.6 }]
         },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: { y: { ticks: { callback: v => fmtShort(v) } } }
-        }
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => fmtShort(v) } } } }
     });
 }
 
@@ -235,20 +268,10 @@ function renderRejectionsChart(rejections) {
     const labels = Object.keys(rejections);
     const values = Object.values(rejections);
     if (!labels.length) return;
-
     new Chart(document.getElementById('chart-rejections'), {
         type: 'doughnut',
-        data: {
-            labels,
-            datasets: [{ data: values, backgroundColor: ['#e63946', '#ff9f1c', '#4361ee', '#2ec4b6', '#8a8a9a'], borderWidth: 0 }]
-        },
-        options: {
-            responsive: true,
-            cutout: '60%',
-            plugins: {
-                legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 12 } }
-            }
-        }
+        data: { labels, datasets: [{ data: values, backgroundColor: ['#e63946', '#ff9f1c', '#4361ee', '#2ec4b6', '#8a8a9a'], borderWidth: 0 }] },
+        options: { responsive: true, cutout: '60%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 12 } } } }
     });
 }
 
@@ -258,17 +281,96 @@ function renderSeamstressesChart(seamstresses) {
         type: 'bar',
         data: {
             labels: seamstresses.map(s => s.name),
+            datasets: [{ label: 'Сумма заказов', data: seamstresses.map(s => s.total), backgroundColor: ['#4361ee', '#2ec4b6', '#ff9f1c', '#e63946'], borderRadius: 8, barPercentage: 0.6 }]
+        },
+        options: { responsive: true, indexAxis: 'y', scales: { x: { ticks: { callback: v => fmtShort(v) } } } }
+    });
+}
+
+function renderAgingChart(buckets) {
+    if (!buckets.length) return;
+    new Chart(document.getElementById('chart-aging'), {
+        type: 'bar',
+        data: {
+            labels: buckets.map(b => b.label),
             datasets: [{
-                label: 'Сумма заказов',
-                data: seamstresses.map(s => s.total),
-                backgroundColor: ['#4361ee', '#2ec4b6', '#ff9f1c', '#e63946'],
-                borderRadius: 8, barPercentage: 0.6,
+                label: 'Сумма',
+                data: buckets.map(b => b.amount),
+                backgroundColor: ['#2ec4b6', '#ff9f1c', '#e63946', '#8b0000'],
+                borderRadius: 6, barPercentage: 0.6,
             }]
         },
         options: {
             responsive: true,
-            indexAxis: 'y',
-            scales: { x: { ticks: { callback: v => fmtShort(v) } } }
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => `${fmt(ctx.raw)} сом (${buckets[ctx.dataIndex].count} шт.)` } }
+            },
+            scales: { y: { ticks: { callback: v => fmtShort(v) } } }
+        }
+    });
+}
+
+function renderProductsChart(products) {
+    if (!products.length) return;
+    new Chart(document.getElementById('chart-products'), {
+        type: 'bar',
+        data: {
+            labels: products.map(p => p.name),
+            datasets: [{
+                label: 'Количество',
+                data: products.map(p => p.count),
+                backgroundColor: ['#4361ee', '#2ec4b6', '#ff9f1c', '#e63946', '#8a8a9a', '#6c5ce7', '#fd79a8', '#00cec9'],
+                borderRadius: 6, barPercentage: 0.6,
+            }]
+        },
+        options: {
+            responsive: true, indexAxis: 'y',
+            plugins: {
+                tooltip: { callbacks: { label: ctx => `${ctx.raw} шт. | ${fmtShort(products[ctx.dataIndex].revenue)} сом` } }
+            },
+        }
+    });
+}
+
+function renderSourcesChart(sources) {
+    if (!sources.length) return;
+    new Chart(document.getElementById('chart-sources'), {
+        type: 'bar',
+        data: {
+            labels: sources.map(s => s.name),
+            datasets: [
+                { label: 'Всего', data: sources.map(s => s.total), backgroundColor: '#4361ee', borderRadius: 6, barPercentage: 0.5 },
+                { label: 'Выиграно', data: sources.map(s => s.won), backgroundColor: '#2ec4b6', borderRadius: 6, barPercentage: 0.5 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                tooltip: { callbacks: { afterLabel: ctx => `Конв: ${sources[ctx.dataIndex].conversion}% | ${fmtShort(sources[ctx.dataIndex].revenue)} сом` } }
+            },
+        }
+    });
+}
+
+function renderMonthlyDealsChart(monthly) {
+    if (!monthly.length) return;
+    new Chart(document.getElementById('chart-monthly-deals'), {
+        type: 'bar',
+        data: {
+            labels: monthly.map(m => m.month),
+            datasets: [
+                { label: 'Выиграно', data: monthly.map(m => m.won), backgroundColor: '#2ec4b6', borderRadius: 6, barPercentage: 0.5 },
+                { label: 'Всего', data: monthly.map(m => m.total), backgroundColor: '#4361ee44', borderRadius: 6, barPercentage: 0.5 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                tooltip: { callbacks: { afterLabel: ctx => `Выручка: ${fmtShort(monthly[ctx.dataIndex].revenue)} сом` } }
+            },
         }
     });
 }

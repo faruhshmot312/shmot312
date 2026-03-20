@@ -27,12 +27,12 @@
                 <button class="tab active" data-tab="main">Главная</button>
                 <button class="tab" data-tab="finance">Финансы</button>
                 <button class="tab" data-tab="deals">Продажи</button>
-                <button class="tab" data-tab="production">Менеджеры</button>
+                <button class="tab" data-tab="production">Команда</button>
+                <button class="tab" data-tab="analytics">Аналитика</button>
             </nav>
 
             <!-- TAB: Главная -->
             <section class="tab-content active" id="tab-main">
-                <!-- KPI Cards -->
                 <div class="kpi-grid">
                     <div class="kpi-card green">
                         <div class="kpi-label">Прибыль</div>
@@ -56,13 +56,33 @@
                     </div>
                 </div>
 
-                <!-- Воронка -->
+                <!-- Мини-метрики -->
+                <div class="card">
+                    <div class="mini-stats">
+                        <div class="mini-stat">
+                            <span class="mini-label">Сделок</span>
+                            <span class="mini-value" id="mini-deals">—</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-label">Конверсия</span>
+                            <span class="mini-value" id="mini-conv">—</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-label">Ср. чек</span>
+                            <span class="mini-value" id="mini-avg">—</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-label">Цикл</span>
+                            <span class="mini-value" id="mini-cycle">—</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <h2>Воронка продаж</h2>
                     <div class="funnel" id="funnel"></div>
                 </div>
 
-                <!-- Просрочки -->
                 <div class="card" id="overdue-card" style="display:none;">
                     <h2>Просрочки</h2>
                     <div id="overdue-list"></div>
@@ -71,7 +91,6 @@
 
             <!-- TAB: Финансы -->
             <section class="tab-content" id="tab-finance">
-                <!-- Сводка прибыли -->
                 <div class="card">
                     <h2>Сводка за год</h2>
                     <div class="stat-row">
@@ -96,19 +115,16 @@
                     </div>
                 </div>
 
-                <!-- Прибыль по месяцам -->
                 <div class="card">
                     <h2>Прибыль по месяцам</h2>
                     <canvas id="chart-profit" height="200"></canvas>
                 </div>
 
-                <!-- Приход / Расход -->
                 <div class="card">
-                    <h2>Приход / Расход по месяцам</h2>
+                    <h2>Приход / Расход</h2>
                     <canvas id="chart-months" height="200"></canvas>
                 </div>
 
-                <!-- Закуп по месяцам -->
                 <div class="card">
                     <h2>Закуп по месяцам</h2>
                     <canvas id="chart-purchases" height="160"></canvas>
@@ -124,29 +140,79 @@
 
             <!-- TAB: Продажи -->
             <section class="tab-content" id="tab-deals">
+                <!-- Дебиторка по возрасту -->
                 <div class="card">
-                    <h2>Менеджеры</h2>
+                    <h2>Дебиторка по возрасту</h2>
+                    <canvas id="chart-aging" height="160"></canvas>
+                </div>
+
+                <div class="card">
+                    <h2>Менеджеры (CRM)</h2>
                     <div id="managers-list"></div>
                 </div>
+
                 <div class="card">
                     <h2>Причины отказов</h2>
                     <canvas id="chart-rejections" height="200"></canvas>
                 </div>
+
                 <div class="card">
                     <h2>Дебиторы</h2>
                     <div id="debitors-list"></div>
                 </div>
             </section>
 
-            <!-- TAB: Менеджеры (таблицы) -->
+            <!-- TAB: Команда -->
             <section class="tab-content" id="tab-production">
                 <div class="card">
-                    <h2>Загрузка менеджеров</h2>
+                    <h2>Менеджеры — выручка</h2>
                     <canvas id="chart-seamstresses" height="200"></canvas>
                 </div>
                 <div class="card">
                     <h2>Детали по менеджерам</h2>
                     <div id="seamstress-details"></div>
+                </div>
+            </section>
+
+            <!-- TAB: Аналитика -->
+            <section class="tab-content" id="tab-analytics">
+                <div class="card">
+                    <h2>Товары — что продаётся</h2>
+                    <canvas id="chart-products" height="220"></canvas>
+                </div>
+
+                <div class="card">
+                    <h2>Вышивка vs ДТФ</h2>
+                    <div id="print-methods"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Повторные клиенты</h2>
+                    <div class="mini-stats">
+                        <div class="mini-stat">
+                            <span class="mini-label">Уникальных</span>
+                            <span class="mini-value" id="clients-unique">—</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-label">Повторных</span>
+                            <span class="mini-value" id="clients-repeat">—</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-label">% повтора</span>
+                            <span class="mini-value" id="clients-pct">—</span>
+                        </div>
+                    </div>
+                    <div id="top-clients" style="margin-top:12px;"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Источники заявок</h2>
+                    <canvas id="chart-sources" height="180"></canvas>
+                </div>
+
+                <div class="card">
+                    <h2>Динамика сделок по месяцам</h2>
+                    <canvas id="chart-monthly-deals" height="200"></canvas>
                 </div>
             </section>
         </div>
