@@ -12,16 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from cache.manager import get_all_sheets_data, get_bitrix_data, get_sheets_meta
-from analytics.metrics import (
-    calculate_monthly_trend,
-    calculate_pipeline_conversion,
-    calculate_avg_deal_cycle,
-    calculate_manager_ranking,
-    calculate_source_analysis,
-    calculate_repeat_clients,
-    calculate_production_load,
-)
+from cache.manager import get_all_sheets_data, get_bitrix_data
 
 logger = logging.getLogger(__name__)
 
@@ -89,52 +80,6 @@ async def dashboard():
                 "balance": _parse_number(row[7]) if len(row) > 7 else 0,
             })
 
-    # --- РнП (неделя) — маржа, прибыль ---
-    finreport = all_data.get("ФИНОТЧЁТ | 2026", {})
-    rnp = finreport.get("РнП (неделя)", [])
-    weekly_data = []
-    if rnp and len(rnp) > 0:
-        headers = rnp[0]
-        for col_idx in range(1, len(headers)):
-            period = headers[col_idx]
-            if not period or not period.strip():
-                continue
-            entry = {"period": period}
-            for row in rnp[1:]:
-                if len(row) > col_idx and row[0]:
-                    key = row[0].strip().lower()
-                    val = _parse_number(row[col_idx])
-                    if key == "доход":
-                        entry["revenue"] = val
-                    elif key == "чп":
-                        entry["profit"] = val
-                    elif key == "маржа":
-                        entry["margin"] = row[col_idx].replace("#DIV/0!", "")
-                    elif key == "заказы":
-                        entry["orders"] = val
-                    elif key == "средний чек":
-                        entry["avg_check"] = val
-                    elif key == "roi / %":
-                        entry["roi"] = row[col_idx].replace("#DIV/0!", "")
-            weekly_data.append(entry)
-
-    # --- ОПиУ — чистая прибыль понедельно ---
-    opu = finreport.get("ОПиУ", [])
-    profit_trend = []
-    if opu and len(opu) > 55:
-        headers_row = opu[0]
-        profit_row = opu[55]  # ЧИСТАЯ ПРИБЫЛЬ
-        revenue_row = opu[1]  # ОПЕРАЦИОННЫЙ ОБОРОТ
-        for col_idx in range(1, min(len(headers_row), len(profit_row))):
-            period = headers_row[col_idx]
-            if not period or not period.strip():
-                continue
-            profit_trend.append({
-                "period": period,
-                "profit": _parse_number(profit_row[col_idx]),
-                "revenue": _parse_number(revenue_row[col_idx]),
-            })
-
     # --- Сделки Bitrix ---
     won = [d for d in deals if d.get("STAGE_ID") == "WON"]
     active = [d for d in deals if d.get("STAGE_ID") in {"NEW", "PREPARATION", "PREPAYMENT_INVOICE", "UC_ZGID52", "EXECUTING", "UC_LGY0S7", "FINAL_INVOICE"}]
@@ -171,7 +116,7 @@ async def dashboard():
                     "amount": s.get("total_amount", 0),
                 })
 
-    # --- Швеи ---
+    # --- Менеджеры (таблицы) ---
     seamstresses = []
     for name in ["Сайкал | SHMOT312", "Алтынай | MyStyle", "Абубакир", "Гульнара"]:
         ss_data = all_data.get(name, {})
@@ -260,8 +205,6 @@ async def dashboard():
             "days_left": round(days_left, 1),
             "months_data": months_data,
         },
-        "weekly": weekly_data,
-        "profit_trend": profit_trend,
         "deals": {
             "total": len(deals),
             "won": len(won),
@@ -275,7 +218,7 @@ async def dashboard():
         "funnel": funnel,
         "debitors": {"total": total_debt, "count": len(debitors), "list": debitor_list},
         "overdue": sorted(overdue, key=lambda x: x["days_late"], reverse=True)[:10],
-        "seamstresses": seamstresses,
+        "managers_sheets": seamstresses,
         "managers": managers,
         "rejections": rejection_reasons,
     }

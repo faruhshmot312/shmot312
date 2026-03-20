@@ -76,17 +76,15 @@ function render(d) {
     document.getElementById('monthly-costs').textContent = fmt(d.finance.monthly_costs) + ' сом/мес';
     document.getElementById('days-reserve').textContent = Math.round(d.finance.days_left) + ' дней';
     renderMonthsChart(d.finance.months_data);
-    renderProfitChart(d.profit_trend);
-    renderWeeklyChart(d.weekly);
 
     // Deals tab
     renderManagers(d.managers);
     renderRejectionsChart(d.rejections);
     renderDebitors(d.debitors.list);
 
-    // Production tab
-    renderSeamstressesChart(d.seamstresses);
-    renderSeamstressDetails(d.seamstresses);
+    // Managers (sheets) tab
+    renderSeamstressesChart(d.managers_sheets);
+    renderSeamstressDetails(d.managers_sheets);
 }
 
 // --- RENDER FUNCTIONS ---
@@ -176,59 +174,6 @@ function renderMonthsChart(months) {
             responsive: true,
             plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
             scales: { y: { ticks: { callback: v => fmtShort(v) } } }
-        }
-    });
-}
-
-function renderProfitChart(trend) {
-    if (!trend.length) return;
-    const labels = trend.map(t => t.period);
-    const profits = trend.map(t => t.profit);
-    const colors = profits.map(p => p >= 0 ? '#2ec4b6' : '#e63946');
-
-    new Chart(document.getElementById('chart-profit'), {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{ data: profits, backgroundColor: colors, borderRadius: 4, barPercentage: 0.7 }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                x: { ticks: { maxRotation: 45, font: { size: 9 } } },
-                y: { ticks: { callback: v => fmtShort(v) } }
-            }
-        }
-    });
-}
-
-function renderWeeklyChart(weekly) {
-    if (!weekly.length) return;
-    new Chart(document.getElementById('chart-weekly'), {
-        type: 'line',
-        data: {
-            labels: weekly.map(w => w.period),
-            datasets: [{
-                label: 'Выручка',
-                data: weekly.map(w => w.revenue || 0),
-                borderColor: '#4361ee',
-                backgroundColor: 'rgba(67, 97, 238, 0.1)',
-                fill: true, tension: 0.3, pointRadius: 3,
-            }, {
-                label: 'ЧП',
-                data: weekly.map(w => w.profit || 0),
-                borderColor: '#2ec4b6',
-                backgroundColor: 'rgba(46, 196, 182, 0.1)',
-                fill: true, tension: 0.3, pointRadius: 3,
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
-            scales: {
-                x: { ticks: { maxRotation: 45, font: { size: 9 } } },
-                y: { ticks: { callback: v => fmtShort(v) } }
-            }
         }
     });
 }

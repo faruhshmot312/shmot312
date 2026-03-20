@@ -34,7 +34,7 @@ def main_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="💰 Дебиторка", callback_data="q:Покажи дебиторку"),
-            InlineKeyboardButton(text="🏭 Швеи", callback_data="q:Загрузка швей"),
+            InlineKeyboardButton(text="🏭 Менеджеры ГШ", callback_data="q:Загрузка менеджеров из таблиц"),
         ],
         [
             InlineKeyboardButton(text="👥 Менеджеры", callback_data="q:Рейтинг менеджеров"),

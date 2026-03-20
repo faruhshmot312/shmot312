@@ -27,7 +27,7 @@
                 <button class="tab active" data-tab="main">Главная</button>
                 <button class="tab" data-tab="finance">Финансы</button>
                 <button class="tab" data-tab="deals">Продажи</button>
-                <button class="tab" data-tab="production">Цех</button>
+                <button class="tab" data-tab="production">Менеджеры</button>
             </nav>
 
             <!-- TAB: Главная -->
@@ -76,14 +76,6 @@
                     <canvas id="chart-months" height="200"></canvas>
                 </div>
                 <div class="card">
-                    <h2>Чистая прибыль (понедельно)</h2>
-                    <canvas id="chart-profit" height="200"></canvas>
-                </div>
-                <div class="card">
-                    <h2>Выручка и маржа (понедельно)</h2>
-                    <canvas id="chart-weekly" height="200"></canvas>
-                </div>
-                <div class="card">
                     <h2>Постоянные расходы</h2>
                     <div class="stat-row">
                         <span>Ежемесячно:</span>
@@ -112,14 +104,14 @@
                 </div>
             </section>
 
-            <!-- TAB: Цех -->
+            <!-- TAB: Менеджеры (таблицы) -->
             <section class="tab-content" id="tab-production">
                 <div class="card">
-                    <h2>Загрузка швей</h2>
+                    <h2>Загрузка менеджеров</h2>
                     <canvas id="chart-seamstresses" height="200"></canvas>
                 </div>
                 <div class="card">
-                    <h2>Детали по швеям</h2>
+                    <h2>Детали по менеджерам</h2>
                     <div id="seamstress-details"></div>
                 </div>
             </section>

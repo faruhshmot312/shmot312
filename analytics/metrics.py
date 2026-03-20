@@ -195,10 +195,10 @@ def calculate_monthly_trend(deals: list[dict]) -> str:
 
 
 def calculate_production_load(sheets_data: dict[str, dict[str, list[list[str]]]]) -> str:
-    """Загрузка производства — данные по швеям."""
+    """Загрузка менеджеров — данные по таблицам."""
     seamstress_tables = ["Сайкал | SHMOT312", "Алтынай | MyStyle", "Абубакир", "Гульнара"]
 
-    lines = ["## Загрузка производства (швеи)", "---"]
+    lines = ["## Загрузка менеджеров", "---"]
 
     for name in seamstress_tables:
         if name not in sheets_data:
