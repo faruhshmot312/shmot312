@@ -6,46 +6,88 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    Message,
+    WebAppInfo,
+)
 
 from ai.engine import ask
+from config import config
 from sheets.registry import add_sheet, load_registry, remove_sheet
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
-async def safe_reply(message: Message, text: str) -> None:
+# --- Inline-кнопки ---
+
+def main_keyboard() -> InlineKeyboardMarkup:
+    """Главное меню с кнопками."""
+    buttons = [
+        [
+            InlineKeyboardButton(text="📊 Сводка", callback_data="report"),
+            InlineKeyboardButton(text="📈 Воронка", callback_data="q:Покажи воронку продаж"),
+        ],
+        [
+            InlineKeyboardButton(text="💰 Дебиторка", callback_data="q:Покажи дебиторку"),
+            InlineKeyboardButton(text="🏭 Швеи", callback_data="q:Загрузка швей"),
+        ],
+        [
+            InlineKeyboardButton(text="👥 Менеджеры", callback_data="q:Рейтинг менеджеров"),
+            InlineKeyboardButton(text="⚠️ Просрочки", callback_data="q:Просроченные заказы"),
+        ],
+        [InlineKeyboardButton(text="📋 Еженедельный", callback_data="weekly")],
+    ]
+    # Кнопка дашборда если URL настроен
+    if config.WEBAPP_URL:
+        buttons.append([
+            InlineKeyboardButton(
+                text="📱 Дашборд",
+                web_app=WebAppInfo(url=config.WEBAPP_URL),
+            )
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+async def safe_reply(message: Message, text: str, reply_markup=None) -> None:
     """Отправляет сообщение с Markdown, при ошибке — без форматирования."""
     chunks = [text[i:i + 4096] for i in range(0, len(text), 4096)]
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks):
+        markup = reply_markup if i == len(chunks) - 1 else None
         try:
-            await message.answer(chunk, parse_mode="Markdown")
+            await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
         except Exception:
             try:
-                await message.answer(chunk)
+                await message.answer(chunk, reply_markup=markup)
             except Exception as e:
                 logger.error("Не удалось отправить сообщение: %s", e)
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
+    # Устанавливаем кнопку WebApp в меню бота
+    if config.WEBAPP_URL:
+        try:
+            await message.bot.set_chat_menu_button(
+                chat_id=message.chat.id,
+                menu_button=MenuButtonWebApp(
+                    text="📱 Дашборд",
+                    web_app=WebAppInfo(url=config.WEBAPP_URL),
+                ),
+            )
+        except Exception as e:
+            logger.warning("Не удалось установить WebApp кнопку: %s", e)
+
     await safe_reply(
         message,
         "👋 Привет, Фарух!\n\n"
         "Я — твой бизнес-ассистент *Шмот312*.\n\n"
-        "Вот что я умею:\n"
-        "📊 Просто напиши вопрос — я проанализирую данные из таблиц и CRM\n"
-        "📋 /sheets — список подключённых таблиц\n"
-        "➕ /add — добавить таблицу\n"
-        "➖ /remove — удалить таблицу\n"
-        "📈 /report — утренняя сводка сейчас\n"
-        "📊 /weekly — еженедельный отчёт\n"
-        "🆔 /myid — показать твой Chat ID\n\n"
-        "Просто задай вопрос, например:\n"
-        "• _Какая выручка за март?_\n"
-        "• _Кто из менеджеров лидирует?_\n"
-        "• _Какая дебиторка?_",
+        "Нажми кнопку ниже или задай вопрос текстом:",
+        reply_markup=main_keyboard(),
     )
 
 
@@ -138,6 +180,12 @@ async def cmd_remove(message: Message) -> None:
         await safe_reply(message, "❌ Укажи номер таблицы (число).")
 
 
+@router.message(Command("menu"))
+async def cmd_menu(message: Message) -> None:
+    """Показывает главное меню с кнопками."""
+    await safe_reply(message, "📌 *Главное меню:*", reply_markup=main_keyboard())
+
+
 @router.message(Command("report"))
 async def cmd_report(message: Message) -> None:
     """Генерирует утреннюю сводку по запросу."""
@@ -146,7 +194,7 @@ async def cmd_report(message: Message) -> None:
         from ai.engine import generate_daily_report
         report = await generate_daily_report()
         await thinking_msg.delete()
-        await safe_reply(message, report)
+        await safe_reply(message, report, reply_markup=main_keyboard())
     except Exception as e:
         await thinking_msg.delete()
         await safe_reply(message, f"❌ Ошибка: {e}")
@@ -160,10 +208,58 @@ async def cmd_weekly(message: Message) -> None:
         from ai.engine import generate_weekly_report
         report = await generate_weekly_report()
         await thinking_msg.delete()
-        await safe_reply(message, report)
+        await safe_reply(message, report, reply_markup=main_keyboard())
     except Exception as e:
         await thinking_msg.delete()
         await safe_reply(message, f"❌ Ошибка: {e}")
+
+
+# --- Callback queries (inline buttons) ---
+
+@router.callback_query(F.data == "report")
+async def cb_report(callback: CallbackQuery) -> None:
+    await callback.answer()
+    msg = await callback.message.answer("🔄 Генерирую сводку...")
+    try:
+        from ai.engine import generate_daily_report
+        report = await generate_daily_report()
+        await msg.delete()
+        await safe_reply(callback.message, report, reply_markup=main_keyboard())
+    except Exception as e:
+        await msg.delete()
+        await safe_reply(callback.message, f"❌ Ошибка: {e}")
+
+
+@router.callback_query(F.data == "weekly")
+async def cb_weekly(callback: CallbackQuery) -> None:
+    await callback.answer()
+    msg = await callback.message.answer("🔄 Генерирую еженедельный отчёт...")
+    try:
+        from ai.engine import generate_weekly_report
+        report = await generate_weekly_report()
+        await msg.delete()
+        await safe_reply(callback.message, report, reply_markup=main_keyboard())
+    except Exception as e:
+        await msg.delete()
+        await safe_reply(callback.message, f"❌ Ошибка: {e}")
+
+
+@router.callback_query(F.data.startswith("q:"))
+async def cb_question(callback: CallbackQuery) -> None:
+    """Обработка вопросов из inline-кнопок."""
+    await callback.answer()
+    question = callback.data[2:]  # убираем "q:"
+    msg = await callback.message.answer("🔄 Анализирую данные...")
+
+    from cache.manager import is_cache_fresh
+    if not await is_cache_fresh():
+        await msg.edit_text("🔄 Обновляю данные...")
+        from cache.manager import refresh_all
+        await refresh_all()
+
+    answer = await ask(question)
+    await msg.delete()
+    await safe_reply(callback.message, answer, reply_markup=main_keyboard())
 
 
 @router.message(F.text)
@@ -171,6 +267,8 @@ async def handle_question(message: Message) -> None:
     """Обработка любого текстового сообщения как вопроса по данным."""
     from cache.manager import is_cache_fresh
 
+    # Показываем typing
+    await message.bot.send_chat_action(message.chat.id, "typing")
     thinking_msg = await message.answer("🔄 Анализирую данные...")
 
     # Проверяем кэш
@@ -183,4 +281,4 @@ async def handle_question(message: Message) -> None:
     answer = await ask(message.text)
 
     await thinking_msg.delete()
-    await safe_reply(message, answer)
+    await safe_reply(message, answer, reply_markup=main_keyboard())

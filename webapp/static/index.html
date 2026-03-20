@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Шмот312 — Дашборд</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            <p>Загрузка данных...</p>
+        </div>
+
+        <div id="content" style="display:none;">
+            <!-- Header -->
+            <header class="header">
+                <h1>ШМОТ312</h1>
+                <span class="header-sub" id="update-time"></span>
+            </header>
+
+            <!-- Navigation tabs -->
+            <nav class="tabs">
+                <button class="tab active" data-tab="main">Главная</button>
+                <button class="tab" data-tab="finance">Финансы</button>
+                <button class="tab" data-tab="deals">Продажи</button>
+                <button class="tab" data-tab="production">Цех</button>
+            </nav>
+
+            <!-- TAB: Главная -->
+            <section class="tab-content active" id="tab-main">
+                <!-- KPI Cards -->
+                <div class="kpi-grid">
+                    <div class="kpi-card blue">
+                        <div class="kpi-label">Баланс</div>
+                        <div class="kpi-value" id="kpi-balance">—</div>
+                        <div class="kpi-sub" id="kpi-days-left">—</div>
+                    </div>
+                    <div class="kpi-card green">
+                        <div class="kpi-label">Выиграно</div>
+                        <div class="kpi-value" id="kpi-won-amount">—</div>
+                        <div class="kpi-sub" id="kpi-won-count">—</div>
+                    </div>
+                    <div class="kpi-card orange">
+                        <div class="kpi-label">В работе</div>
+                        <div class="kpi-value" id="kpi-active-amount">—</div>
+                        <div class="kpi-sub" id="kpi-active-count">—</div>
+                    </div>
+                    <div class="kpi-card red">
+                        <div class="kpi-label">Дебиторка</div>
+                        <div class="kpi-value" id="kpi-debt">—</div>
+                        <div class="kpi-sub" id="kpi-debt-count">—</div>
+                    </div>
+                </div>
+
+                <!-- Воронка -->
+                <div class="card">
+                    <h2>Воронка продаж</h2>
+                    <div class="funnel" id="funnel"></div>
+                </div>
+
+                <!-- Просрочки -->
+                <div class="card" id="overdue-card" style="display:none;">
+                    <h2>Просрочки</h2>
+                    <div id="overdue-list"></div>
+                </div>
+            </section>
+
+            <!-- TAB: Финансы -->
+            <section class="tab-content" id="tab-finance">
+                <div class="card">
+                    <h2>Приход / Расход по месяцам</h2>
+                    <canvas id="chart-months" height="200"></canvas>
+                </div>
+                <div class="card">
+                    <h2>Чистая прибыль (понедельно)</h2>
+                    <canvas id="chart-profit" height="200"></canvas>
+                </div>
+                <div class="card">
+                    <h2>Выручка и маржа (понедельно)</h2>
+                    <canvas id="chart-weekly" height="200"></canvas>
+                </div>
+                <div class="card">
+                    <h2>Постоянные расходы</h2>
+                    <div class="stat-row">
+                        <span>Ежемесячно:</span>
+                        <span class="stat-val" id="monthly-costs">—</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Запас дней:</span>
+                        <span class="stat-val" id="days-reserve">—</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: Продажи -->
+            <section class="tab-content" id="tab-deals">
+                <div class="card">
+                    <h2>Менеджеры</h2>
+                    <div id="managers-list"></div>
+                </div>
+                <div class="card">
+                    <h2>Причины отказов</h2>
+                    <canvas id="chart-rejections" height="200"></canvas>
+                </div>
+                <div class="card">
+                    <h2>Дебиторы</h2>
+                    <div id="debitors-list"></div>
+                </div>
+            </section>
+
+            <!-- TAB: Цех -->
+            <section class="tab-content" id="tab-production">
+                <div class="card">
+                    <h2>Загрузка швей</h2>
+                    <canvas id="chart-seamstresses" height="200"></canvas>
+                </div>
+                <div class="card">
+                    <h2>Детали по швеям</h2>
+                    <div id="seamstress-details"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -62,6 +62,10 @@ async def _refresh_cache_job():
 
         # Проверяем алерты после обновления
         await _check_alerts()
+
+        # Чистим старые алерты раз в сутки (при первом запуске после полуночи)
+        from cache.db import cleanup_old_alerts
+        await cleanup_old_alerts(days=7)
     except Exception as e:
         logger.error("Ошибка обновления кэша: %s", e)
 

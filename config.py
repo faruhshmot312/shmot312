@@ -40,5 +40,10 @@ class Config:
     ALERT_EXPENSE_MAX: float = 100_000
     ALERT_ORDERS_MIN: int = 3
 
+    # WebApp
+    WEBAPP_HOST: str = "0.0.0.0"
+    WEBAPP_PORT: int = 8080
+    WEBAPP_URL: str = os.environ.get("WEBAPP_URL", "")  # https://your-domain.com
+
 
 config = Config()

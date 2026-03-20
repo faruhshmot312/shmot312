@@ -14,13 +14,13 @@ from sheets.parser import spreadsheet_to_text, table_to_text
 
 logger = logging.getLogger(__name__)
 
-_client: anthropic.Anthropic | None = None
+_client: anthropic.AsyncAnthropic | None = None
 
 
-def get_client() -> anthropic.Anthropic:
+def get_client() -> anthropic.AsyncAnthropic:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        _client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
     return _client
 
 
@@ -46,7 +46,7 @@ async def route_question(question: str) -> dict:
 
     client = get_client()
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model=config.AI_ROUTER_MODEL,
             max_tokens=1024,
             system=ROUTER_PROMPT,
@@ -152,7 +152,7 @@ async def ask(question: str, data_context: str | None = None) -> str:
 Вопрос: {question}"""
 
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model=config.AI_MODEL,
             max_tokens=4096,
             system=SYSTEM_PROMPT,

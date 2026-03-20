@@ -43,11 +43,37 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
 );
 """
 
+_db: aiosqlite.Connection | None = None
+_initialized: bool = False
+
 
 async def get_db() -> aiosqlite.Connection:
-    """Открывает соединение с БД и создаёт таблицы если нужно."""
-    db = await aiosqlite.connect(config.DB_PATH)
-    db.row_factory = aiosqlite.Row
-    await db.executescript(SCHEMA)
+    """Возвращает singleton соединение с БД."""
+    global _db, _initialized
+    if _db is None:
+        _db = await aiosqlite.connect(config.DB_PATH)
+        _db.row_factory = aiosqlite.Row
+    if not _initialized:
+        await _db.executescript(SCHEMA)
+        await _db.commit()
+        _initialized = True
+    return _db
+
+
+async def close_db() -> None:
+    """Закрывает соединение с БД."""
+    global _db, _initialized
+    if _db is not None:
+        await _db.close()
+        _db = None
+        _initialized = False
+
+
+async def cleanup_old_alerts(days: int = 7) -> None:
+    """Удаляет алерты старше N дней."""
+    db = await get_db()
+    await db.execute(
+        "DELETE FROM alerts_sent WHERE sent_at < datetime('now', ?)",
+        (f"-{days} days",),
+    )
     await db.commit()
-    return db

@@ -1,7 +1,8 @@
-"""Инициализация и запуск Telegram-бота."""
+"""Инициализация и запуск Telegram-бота + WebApp сервера."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -23,7 +24,9 @@ def create_bot() -> tuple[Bot, Dispatcher]:
     dp = Dispatcher()
 
     # Middleware авторизации
-    dp.message.middleware(AuthMiddleware())
+    auth = AuthMiddleware()
+    dp.message.middleware(auth)
+    dp.callback_query.middleware(auth)
 
     # Подключаем хэндлеры
     dp.include_router(router)
@@ -31,8 +34,23 @@ def create_bot() -> tuple[Bot, Dispatcher]:
     return bot, dp
 
 
+async def start_webapp():
+    """Запускает FastAPI сервер для WebApp."""
+    import uvicorn
+    from webapp.server import app
+
+    uvicorn_config = uvicorn.Config(
+        app,
+        host=config.WEBAPP_HOST,
+        port=config.WEBAPP_PORT,
+        log_level="warning",
+    )
+    server = uvicorn.Server(uvicorn_config)
+    await server.serve()
+
+
 async def start_bot() -> None:
-    """Запускает polling бота с кэшем и планировщиком."""
+    """Запускает polling бота с кэшем, планировщиком и WebApp."""
     bot, dp = create_bot()
 
     # Начальная загрузка кэша
@@ -51,9 +69,16 @@ async def start_bot() -> None:
     logger.info("Планировщик запущен: кэш каждые %d мин, сводка в %02d:%02d",
                 config.CACHE_TTL_MINUTES, config.DAILY_REPORT_HOUR, config.DAILY_REPORT_MINUTE)
 
+    # Запускаем WebApp сервер в фоне
+    webapp_task = asyncio.create_task(start_webapp())
+    logger.info("WebApp сервер запущен на порту %d", config.WEBAPP_PORT)
+
     logger.info("Бот запущен!")
     try:
         await dp.start_polling(bot)
     finally:
+        webapp_task.cancel()
         scheduler.shutdown()
+        from cache.db import close_db
+        await close_db()
         await bot.session.close()

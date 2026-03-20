@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import gspread
 from google.oauth2.service_account import Credentials
 
 from config import config
+
+logger = logging.getLogger(__name__)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -15,16 +18,22 @@ SCOPES = [
 ]
 
 _client: gspread.Client | None = None
+_creds: Credentials | None = None
 
 
 def get_client() -> gspread.Client:
-    """Возвращает авторизованный gspread клиент (singleton)."""
-    global _client
-    if _client is None:
-        creds = Credentials.from_service_account_file(
+    """Возвращает авторизованный gspread клиент с автообновлением токена."""
+    global _client, _creds
+    if _creds is None:
+        _creds = Credentials.from_service_account_file(
             config.GOOGLE_CREDENTIALS_FILE, scopes=SCOPES
         )
-        _client = gspread.authorize(creds)
+    if _creds.expired or not _creds.valid:
+        from google.auth.transport.requests import Request
+        _creds.refresh(Request())
+        _client = None  # пересоздаём клиент с новым токеном
+    if _client is None:
+        _client = gspread.authorize(_creds)
     return _client
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from config import config
 
@@ -15,22 +15,25 @@ class AuthMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
-        event: Message,
+        handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
+        event: Message | CallbackQuery,
         data: dict[str, Any],
     ) -> Any:
         if config.ADMIN_CHAT_ID == 0:
-            # Если ADMIN_CHAT_ID не задан — пропускаем всех (для первоначальной настройки)
             return await handler(event, data)
 
-        if event.from_user and event.from_user.id == config.ADMIN_CHAT_ID:
+        user = event.from_user
+        if user and user.id == config.ADMIN_CHAT_ID:
             return await handler(event, data)
 
-        # Для неавторизованных — показываем их chat_id (полезно при настройке)
-        if event.from_user:
+        # Для неавторизованных
+        if isinstance(event, Message) and user:
             await event.answer(
-                f"⛔ Доступ запрещён.\n\nТвой Chat ID: `{event.from_user.id}`\n"
+                f"⛔ Доступ запрещён.\n\nТвой Chat ID: `{user.id}`\n"
                 "Передай его владельцу бота для добавления доступа.",
                 parse_mode="Markdown",
             )
+        elif isinstance(event, CallbackQuery):
+            await event.answer("⛔ Доступ запрещён", show_alert=True)
+
         return None
