@@ -19,8 +19,19 @@
             <!-- Header -->
             <header class="header">
                 <h1>ШМОТ312</h1>
-                <span class="header-sub" id="update-time"></span>
+                <div class="header-right">
+                    <span class="header-sub" id="update-time"></span>
+                    <button class="refresh-btn" id="refresh-btn" title="Обновить">&#8635;</button>
+                </div>
             </header>
+
+            <!-- Period filter -->
+            <div class="period-filter">
+                <button class="period-btn active" data-period="all">Всё</button>
+                <button class="period-btn" data-period="quarter">Квартал</button>
+                <button class="period-btn" data-period="month">Месяц</button>
+                <button class="period-btn" data-period="week">Неделя</button>
+            </div>
 
             <!-- Navigation tabs -->
             <nav class="tabs">
@@ -33,6 +44,22 @@
 
             <!-- TAB: Главная -->
             <section class="tab-content active" id="tab-main">
+                <!-- План-факт -->
+                <div class="card plan-card" id="plan-card">
+                    <div class="plan-header">
+                        <h2>План на месяц</h2>
+                        <span class="plan-pct" id="plan-pct">—</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar" id="plan-bar" style="width:0%"></div>
+                    </div>
+                    <div class="plan-details">
+                        <span id="plan-current">—</span>
+                        <span id="plan-target">—</span>
+                    </div>
+                    <div class="plan-sub" id="plan-daily">—</div>
+                </div>
+
                 <div class="kpi-grid">
                     <div class="kpi-card green">
                         <div class="kpi-label">Прибыль</div>
@@ -140,7 +167,6 @@
 
             <!-- TAB: Продажи -->
             <section class="tab-content" id="tab-deals">
-                <!-- Дебиторка по возрасту -->
                 <div class="card">
                     <h2>Дебиторка по возрасту</h2>
                     <canvas id="chart-aging" height="160"></canvas>
@@ -164,6 +190,12 @@
 
             <!-- TAB: Команда -->
             <section class="tab-content" id="tab-production">
+                <!-- Рейтинг менеджеров -->
+                <div class="card">
+                    <h2>Рейтинг менеджеров</h2>
+                    <div id="manager-ranking"></div>
+                </div>
+
                 <div class="card">
                     <h2>Менеджеры — выручка</h2>
                     <canvas id="chart-seamstresses" height="200"></canvas>

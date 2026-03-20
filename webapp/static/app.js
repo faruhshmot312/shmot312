@@ -5,6 +5,10 @@ if (tg) {
     tg.expand();
 }
 
+// State
+let currentPeriod = 'all';
+let chartInstances = {};
+
 // Format numbers
 function fmt(n) {
     if (n === null || n === undefined) return '—';
@@ -24,6 +28,19 @@ Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
 Chart.defaults.font.size = 11;
 Chart.defaults.plugins.legend.display = false;
 
+// Destroy chart before re-creating
+function destroyChart(id) {
+    if (chartInstances[id]) {
+        chartInstances[id].destroy();
+        delete chartInstances[id];
+    }
+}
+
+function createChart(id, config) {
+    destroyChart(id);
+    chartInstances[id] = new Chart(document.getElementById(id), config);
+}
+
 // Tab navigation
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -34,10 +51,35 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
+// Period filter
+document.querySelectorAll('.period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPeriod = btn.dataset.period;
+        loadDashboard();
+    });
+});
+
+// Refresh button
+document.getElementById('refresh-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('refresh-btn');
+    btn.classList.add('spinning');
+    btn.disabled = true;
+    try {
+        await fetch('/api/refresh', { method: 'POST' });
+        await loadDashboard();
+    } catch (e) {
+        console.error(e);
+    }
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+});
+
 // Load data
 async function loadDashboard() {
     try {
-        const resp = await fetch('/api/dashboard');
+        const resp = await fetch('/api/dashboard?period=' + currentPeriod);
         const data = await resp.json();
         render(data);
     } catch (e) {
@@ -53,10 +95,14 @@ function render(d) {
     document.getElementById('update-time').textContent =
         now.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+    // === Plan-Fact ===
+    renderPlanFact(d.plan_fact);
+
     // === KPI ===
     const profit = d.profit.net_profit_ytd;
-    document.getElementById('kpi-profit').textContent = fmtShort(profit);
-    document.getElementById('kpi-profit').classList.add(profit >= 0 ? 'color-green' : 'color-red');
+    const kpiProfit = document.getElementById('kpi-profit');
+    kpiProfit.textContent = fmtShort(profit);
+    kpiProfit.className = 'kpi-value ' + (profit >= 0 ? 'color-green' : 'color-red');
     document.getElementById('kpi-margin').textContent = `маржа ${d.profit.gross_margin}%`;
 
     document.getElementById('kpi-balance').textContent = fmtShort(d.finance.total);
@@ -85,7 +131,7 @@ function render(d) {
     document.getElementById('profit-unpaid').textContent = fmt(d.profit.total_unpaid) + ' сом';
     const netEl = document.getElementById('profit-net');
     netEl.textContent = fmt(d.profit.net_profit_ytd) + ' сом';
-    netEl.classList.add(d.profit.net_profit_ytd >= 0 ? 'color-green' : 'color-red');
+    netEl.className = 'stat-val ' + (d.profit.net_profit_ytd >= 0 ? 'color-green' : 'color-red');
     document.getElementById('days-reserve').textContent = Math.round(d.finance.days_left) + ' дней';
 
     renderProfitChart(d.profit.monthly_profit);
@@ -99,6 +145,7 @@ function render(d) {
     renderDebitors(d.debitors.list);
 
     // === Team tab ===
+    renderManagerRanking(d.manager_ranking);
     renderSeamstressesChart(d.managers_sheets);
     renderSeamstressDetails(d.managers_sheets);
 
@@ -111,6 +158,23 @@ function render(d) {
 }
 
 // === RENDER FUNCTIONS ===
+
+function renderPlanFact(pf) {
+    if (!pf) return;
+    const pct = Math.min(pf.pct, 100);
+    document.getElementById('plan-pct').textContent = pf.pct + '%';
+    document.getElementById('plan-pct').className = 'plan-pct ' + (pf.pct >= 100 ? 'color-green' : pf.pct >= 70 ? 'color-orange' : 'color-red');
+    document.getElementById('plan-bar').style.width = pct + '%';
+    document.getElementById('plan-bar').className = 'progress-bar ' + (pf.pct >= 100 ? 'bar-green' : pf.pct >= 70 ? 'bar-orange' : 'bar-red');
+    document.getElementById('plan-current').textContent = fmtShort(pf.current) + ' сом';
+    document.getElementById('plan-target').textContent = 'из ' + fmtShort(pf.target);
+    if (pf.pct < 100 && pf.days_remaining > 0) {
+        document.getElementById('plan-daily').textContent =
+            `${pf.deals_won} выиграно | осталось ${pf.days_remaining} дн. | нужно ${fmtShort(pf.daily_needed)}/день`;
+    } else if (pf.pct >= 100) {
+        document.getElementById('plan-daily').textContent = 'План выполнен!';
+    }
+}
 
 function renderFunnel(funnel) {
     const el = document.getElementById('funnel');
@@ -153,6 +217,33 @@ function renderManagers(managers) {
             </div>
         </div>`
     ).join('');
+}
+
+function renderManagerRanking(ranking) {
+    const el = document.getElementById('manager-ranking');
+    if (!ranking || !ranking.length) { el.innerHTML = '<p>Нет данных</p>'; return; }
+    const active = ranking.filter(m => m.revenue > 0 || m.deals_total > 0);
+    if (!active.length) { el.innerHTML = '<p>Нет данных</p>'; return; }
+    const maxRev = Math.max(...active.map(m => m.revenue));
+    el.innerHTML = '<div class="ranking-table">' +
+        '<div class="ranking-header"><span>Менеджер</span><span>Выручка</span><span>Конв</span><span>Ср.чек</span></div>' +
+        active.map((m, i) => {
+            const barW = maxRev > 0 ? (m.revenue / maxRev * 100) : 0;
+            const medal = i === 0 ? '1' : i === 1 ? '2' : i === 2 ? '3' : '';
+            return `<div class="ranking-row">
+                <div class="ranking-info">
+                    <span class="ranking-pos ${i < 3 ? 'top' + (i+1) : ''}">${medal || (i+1)}</span>
+                    <span class="ranking-name">${m.name}</span>
+                </div>
+                <div class="ranking-bar-bg"><div class="ranking-bar" style="width:${barW}%"></div></div>
+                <div class="ranking-stats">
+                    <span>${fmtShort(m.revenue)}</span>
+                    <span>${m.conversion}%</span>
+                    <span>${fmtShort(m.avg_check)}</span>
+                </div>
+            </div>`;
+        }).join('') +
+    '</div>';
 }
 
 function renderDebitors(list) {
@@ -218,7 +309,7 @@ function renderRepeatClients(data) {
 
 function renderProfitChart(monthly) {
     if (!monthly.length) return;
-    new Chart(document.getElementById('chart-profit'), {
+    createChart('chart-profit', {
         type: 'bar',
         data: {
             labels: monthly.map(m => m.month),
@@ -235,7 +326,7 @@ function renderProfitChart(monthly) {
 
 function renderPurchasesChart(purchases) {
     if (!purchases.length) return;
-    new Chart(document.getElementById('chart-purchases'), {
+    createChart('chart-purchases', {
         type: 'bar',
         data: {
             labels: purchases.map(p => p.month),
@@ -247,7 +338,7 @@ function renderPurchasesChart(purchases) {
 
 function renderMonthsChart(months) {
     if (!months.length) return;
-    new Chart(document.getElementById('chart-months'), {
+    createChart('chart-months', {
         type: 'bar',
         data: {
             labels: months.map(m => m.month),
@@ -268,7 +359,7 @@ function renderRejectionsChart(rejections) {
     const labels = Object.keys(rejections);
     const values = Object.values(rejections);
     if (!labels.length) return;
-    new Chart(document.getElementById('chart-rejections'), {
+    createChart('chart-rejections', {
         type: 'doughnut',
         data: { labels, datasets: [{ data: values, backgroundColor: ['#e63946', '#ff9f1c', '#4361ee', '#2ec4b6', '#8a8a9a'], borderWidth: 0 }] },
         options: { responsive: true, cutout: '60%', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, padding: 12 } } } }
@@ -277,7 +368,7 @@ function renderRejectionsChart(rejections) {
 
 function renderSeamstressesChart(seamstresses) {
     if (!seamstresses.length) return;
-    new Chart(document.getElementById('chart-seamstresses'), {
+    createChart('chart-seamstresses', {
         type: 'bar',
         data: {
             labels: seamstresses.map(s => s.name),
@@ -289,7 +380,7 @@ function renderSeamstressesChart(seamstresses) {
 
 function renderAgingChart(buckets) {
     if (!buckets.length) return;
-    new Chart(document.getElementById('chart-aging'), {
+    createChart('chart-aging', {
         type: 'bar',
         data: {
             labels: buckets.map(b => b.label),
@@ -313,14 +404,14 @@ function renderAgingChart(buckets) {
 
 function renderProductsChart(products) {
     if (!products.length) return;
-    new Chart(document.getElementById('chart-products'), {
+    createChart('chart-products', {
         type: 'bar',
         data: {
             labels: products.map(p => p.name),
             datasets: [{
                 label: 'Количество',
                 data: products.map(p => p.count),
-                backgroundColor: ['#4361ee', '#2ec4b6', '#ff9f1c', '#e63946', '#8a8a9a', '#6c5ce7', '#fd79a8', '#00cec9'],
+                backgroundColor: ['#4361ee', '#2ec4b6', '#ff9f1c', '#e63946', '#8a8a9a', '#6c5ce7', '#fd79a8', '#00cec9', '#636e72', '#d63031'],
                 borderRadius: 6, barPercentage: 0.6,
             }]
         },
@@ -335,7 +426,7 @@ function renderProductsChart(products) {
 
 function renderSourcesChart(sources) {
     if (!sources.length) return;
-    new Chart(document.getElementById('chart-sources'), {
+    createChart('chart-sources', {
         type: 'bar',
         data: {
             labels: sources.map(s => s.name),
@@ -356,7 +447,7 @@ function renderSourcesChart(sources) {
 
 function renderMonthlyDealsChart(monthly) {
     if (!monthly.length) return;
-    new Chart(document.getElementById('chart-monthly-deals'), {
+    createChart('chart-monthly-deals', {
         type: 'bar',
         data: {
             labels: monthly.map(m => m.month),

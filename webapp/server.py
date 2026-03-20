@@ -6,8 +6,9 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +18,9 @@ from cache.manager import get_all_sheets_data, get_bitrix_data, refresh_all
 logger = logging.getLogger(__name__)
 
 _TZ = timezone(timedelta(hours=6))  # Asia/Bishkek
+
+# План продаж на месяц (сом)
+MONTHLY_SALES_TARGET = 2_500_000
 
 app = FastAPI(title="Шмот312 Dashboard API")
 
@@ -54,11 +58,30 @@ async def index():
     return FileResponse(str(STATIC_DIR / "index.html"))
 
 
+def _filter_deals_by_period(deals: list[dict], period: str) -> list[dict]:
+    """Фильтрует сделки по периоду."""
+    if period == "all":
+        return deals
+    now = datetime.now(_TZ)
+    if period == "week":
+        since = now - timedelta(days=7)
+    elif period == "month":
+        since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "quarter":
+        q_month = ((now.month - 1) // 3) * 3 + 1
+        since = now.replace(month=q_month, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        return deals
+    since_str = since.strftime("%Y-%m-%d")
+    return [d for d in deals if (d.get("DATE_CREATE", "") or "")[:10] >= since_str]
+
+
 @app.get("/api/dashboard")
-async def dashboard():
+async def dashboard(period: Optional[str] = Query("all", regex="^(week|month|quarter|all)$")):
     """Главный экран — ключевые показатели."""
     all_data = await get_all_sheets_data()
-    deals = await get_bitrix_data("deals") or []
+    all_deals = await get_bitrix_data("deals") or []
+    deals = _filter_deals_by_period(all_deals, period)
     users = await get_bitrix_data("users") or []
     pipeline = await get_bitrix_data("pipeline_stats") or {}
 
@@ -286,20 +309,32 @@ async def dashboard():
                     lower = name.lower()
                     if "худи" in lower:
                         cat = "Худи"
-                    elif "футболк" in lower:
+                    elif "футболк" in lower or "тишка" in lower:
                         cat = "Футболки"
                     elif "фартук" in lower:
                         cat = "Фартуки"
-                    elif "кепк" in lower or "бейс" in lower:
+                    elif "кепк" in lower or "бейс" in lower or "панам" in lower:
                         cat = "Кепки"
-                    elif "рубаш" in lower:
+                    elif "рубаш" in lower or "рубашк" in lower:
                         cat = "Рубашки"
-                    elif "батник" in lower or "свитш" in lower:
+                    elif "батник" in lower or "свитш" in lower or "толстовк" in lower:
                         cat = "Свитшоты"
-                    elif "шеврон" in lower:
+                    elif "поло" in lower:
+                        cat = "Поло"
+                    elif "жилет" in lower or "жилетк" in lower:
+                        cat = "Жилетки"
+                    elif "куртк" in lower or "ветровк" in lower or "бомбер" in lower:
+                        cat = "Куртки"
+                    elif "штан" in lower or "брюк" in lower or "шорт" in lower:
+                        cat = "Брюки/Шорты"
+                    elif "шеврон" in lower or "нашивк" in lower:
                         cat = "Шевроны"
-                    elif "бандан" in lower:
-                        cat = "Банданы"
+                    elif "бандан" in lower or "шапк" in lower or "шарф" in lower:
+                        cat = "Аксессуары"
+                    elif "сумк" in lower or "рюкзак" in lower or "мешок" in lower:
+                        cat = "Сумки"
+                    elif "комбинезон" in lower or "халат" in lower:
+                        cat = "Спецодежда"
                     elif "изделие клиента" in lower:
                         cat = "Изделие клиента"
                     else:
@@ -357,11 +392,21 @@ async def dashboard():
     median_cycle = sorted(cycles)[len(cycles) // 2] if cycles else 0
 
     # --- Аналитика: источники ---
-    source_names = {"WEBFORM": "Сайт", "CALLBACK": "Обратный звонок", "CALL": "Звонок", "2": "Рекомендация", "4": "Реклама"}
+    source_names = {
+        "WEBFORM": "Сайт", "WEB": "Сайт",
+        "CALLBACK": "Обратный звонок",
+        "CALL": "Звонок", "PHONE": "Звонок",
+        "2": "Рекомендация", "RC_GENERATOR": "Рекомендация",
+        "4": "Реклама", "ADVERTISING": "Реклама", "AD": "Реклама",
+        "EMAIL": "Email", "STORE": "Магазин",
+        "1": "Звонок", "3": "Сайт", "5": "Соц.сети", "6": "2GIS",
+        "SELF": "Самостоятельно", "OTHER": "Другое",
+        "TRADE_SHOW": "Выставка", "PARTNER": "Партнёр",
+    }
     source_stats: dict[str, dict] = {}
     for d in deals:
-        sid = d.get("SOURCE_ID", "") or "Другое"
-        label = source_names.get(sid, sid)
+        sid = d.get("SOURCE_ID", "") or ""
+        label = source_names.get(sid, "Другое" if not sid else sid)
         if label not in source_stats:
             source_stats[label] = {"total": 0, "won": 0, "revenue": 0}
         source_stats[label]["total"] += 1
@@ -391,6 +436,29 @@ async def dashboard():
         elif d.get("STAGE_ID") in lost_stages:
             month_deals[mkey]["lost"] += 1
     monthly_deals = [v for _, v in sorted(month_deals.items())]
+
+    # --- План-факт ---
+    now = datetime.now(_TZ)
+    current_month_key = now.strftime("%Y-%m")
+    current_month_data = month_deals.get(current_month_key, {"won": 0, "revenue": 0, "total": 0})
+    days_in_month = (now.replace(month=now.month % 12 + 1, day=1) - timedelta(days=1)).day if now.month < 12 else 31
+    day_of_month = now.day
+    plan_pct = round(current_month_data["revenue"] / MONTHLY_SALES_TARGET * 100, 1) if MONTHLY_SALES_TARGET > 0 else 0
+    days_remaining = days_in_month - day_of_month
+    daily_needed = (MONTHLY_SALES_TARGET - current_month_data["revenue"]) / max(days_remaining, 1) if days_remaining > 0 else 0
+
+    # --- Рейтинг менеджеров (объединённый CRM + Sheets) ---
+    manager_ranking = []
+    for m in managers:
+        rank_entry = {
+            "name": m["name"],
+            "revenue": m["revenue"],
+            "deals_won": m["won"],
+            "deals_total": m["total"],
+            "conversion": m["conversion"],
+            "avg_check": m["avg_check"],
+        }
+        manager_ranking.append(rank_entry)
 
     return {
         "finance": {
@@ -451,4 +519,15 @@ async def dashboard():
             "sources": sources,
             "monthly_deals": monthly_deals,
         },
+        "plan_fact": {
+            "target": MONTHLY_SALES_TARGET,
+            "current": round(current_month_data.get("revenue", 0)),
+            "pct": plan_pct,
+            "deals_won": current_month_data.get("won", 0),
+            "deals_total": current_month_data.get("total", 0),
+            "days_remaining": days_remaining,
+            "daily_needed": round(daily_needed),
+        },
+        "manager_ranking": manager_ranking,
+        "period": period,
     }
